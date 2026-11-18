@@ -1,4 +1,13 @@
 export default {
+  choosePurpose: "בחר מטרת ביקור",
+  dateLabel: "תאריך",
+  timeLabel: "שעה",
+  clockFormat: "אפשר להקליד 08:30 או 0830.",
+  durationLabel: "משך אישור הכניסה",
+  requiredField: "יש למלא את השדה הזה",
+  invalidTime: "הזן שעה תקינה בפורמט 24 שעות",
+  submittedNotice: "הבקשה נקלטה. אפשר להגיש בקשה נוספת.",
+  countsError: "לא הצלחנו לטעון את מוני הבקשות.",
   otherDetails: "פירוט מטרת הביקור",
   syntheticExample: "לדוגמה, מפגש הדגמה פיקטיבי",
   arrival: "מועד כניסה",

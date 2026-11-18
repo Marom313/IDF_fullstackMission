@@ -15,8 +15,16 @@ export type DocumentMetadata = Schemas['Metadata']
 
 export const validQuery = (query: string) => /^[0-9a-f-]{4,36}$/i.test(query)
 
-export function visitDuration(arrival: string, departure: string) {
-  return Math.ceil((new Date(departure).getTime() - new Date(arrival).getTime()) / 86_400_000)
+export function visitDateTime(date: string, time: string) {
+  const clock = /^([01]\d|2[0-3]):?([0-5]\d)$/.exec(time.trim())
+  if (!date || !clock) return undefined
+  const parsed = new Date(date + 'T' + clock[1] + ':' + clock[2])
+  if (parsed.getHours() !== Number(clock[1]) || parsed.getMinutes() !== Number(clock[2])) return undefined
+  return parsed
+}
+
+export function visitMinutes(arrival: string | Date, departure: string | Date) {
+  return Math.floor((new Date(departure).getTime() - new Date(arrival).getTime()) / 60_000)
 }
 
 async function fetchApplication(role: Role, path: string, options?: RequestInit): Promise<Response> {
@@ -29,8 +37,8 @@ async function fetchApplication(role: Role, path: string, options?: RequestInit)
     },
   })
   if (!response.ok) {
-    await response.body?.cancel()
-    throw new Error(String(response.status))
+    const problem = await response.json().catch(() => undefined)
+    throw new Error(problem?.detail ?? String(response.status))
   }
   return response
 }
@@ -40,6 +48,8 @@ async function request<T>(role: Role, path: string, options?: RequestInit): Prom
 }
 
 export const api = {
+  counts: (role: Role, signal: AbortSignal) =>
+    request<Partial<Record<Status, number>>>(role, '/counts', { signal }),
   list: (role: Role, page: number, status: Status | '', query: string, signal: AbortSignal) =>
     request<Application[]>(role, '?' + new URLSearchParams({
       page: String(page), ...(status && { status }), ...(query && { query }),

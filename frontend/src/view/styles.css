@@ -13,13 +13,22 @@ h2 { margin-block: 0 0.75rem; font-size: 1.25rem; }
 label { display: grid; gap: 0.25rem; }
 input, button, select { font: inherit; padding: 0.4rem 0.6rem; border: 1px solid #63798b; border-radius: 0.35rem; }
 .form-note { flex-basis: 100%; margin: 0; color: #435a6c; font-size: 0.9rem; }
-.purpose-details { flex-basis: 100%; }
-.purpose-details input { inline-size: min(100%, 28rem); }
+.submission-fields { display: grid; gap: 1rem; border: 0; padding: 0; margin: 0; min-inline-size: 0; }
+.submission-fields > label { max-inline-size: 30rem; }
+.visit-fields { display: flex; gap: 0.75rem; align-items: start; flex-wrap: wrap; min-inline-size: 0; margin: 0; border: 1px solid #d1dce6; border-radius: 0.75rem; padding: 0.75rem; }
+.visit-fields legend { padding-inline: 0.35rem; color: #163b57; font-weight: 650; }
+.visit-fields input[type=text] { inline-size: 7rem; font-variant-numeric: tabular-nums; }
+.field-error { color: #9f1722; font-size: 0.9rem; }
+[aria-invalid=true] { border-color: #9f1722; }
+.duration-summary { display: flex; gap: 0.5rem 1rem; flex-wrap: wrap; justify-content: space-between; background: #edf5fb; border-radius: 0.65rem; padding: 0.65rem 0.9rem; margin: 0; color: #163b57; }
+.success-note { color: #195339; margin-block-end: 0; }
 .search { margin-block-start: 1rem; }
 .search input { inline-size: min(24rem, 72vw); }
 button { color: white; background: #235677; cursor: pointer; }
 .secondary { color: #194665; background: #f2f7fb; }
 .secondary[aria-pressed=true] { color: white; background: #235677; }
+.status-filter { display: inline-flex; align-items: center; gap: 0.5rem; }
+.status-count { background: #e0edf6; color: #163b57; border-radius: 1rem; padding-inline: 0.45rem; font-variant-numeric: tabular-nums; }
 button:disabled { opacity: 0.55; cursor: default; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #198049; outline-offset: 2px; }
 .applications { display: grid; gap: 0.5rem; padding: 0; list-style: none; }
@@ -34,6 +43,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .status[data-status=REJECTED] { background: #fce5e9; color: #842036; }
 .status[data-status=IN_REVIEW] { background: #fff0cf; color: #674706; }
 .status[data-status=EXPIRED] { background: #e8edf0; color: #3d4c59; }
+.timeline { padding: 0; list-style: none; }
+.timeline li { position: relative; margin-inline-start: 0.45rem; border-inline-start: 2px solid #c8dae8; padding-block: 0 1rem; padding-inline-start: 1.25rem; }
+.timeline li::before { content: ''; position: absolute; inset-inline-start: -0.38rem; inset-block-start: 0.4rem; inline-size: 0.6rem; block-size: 0.6rem; border-radius: 50%; background: #235677; box-shadow: 0 0 0 3px white; }
+.timeline li:last-child { border-color: transparent; padding-block-end: 0; }
+.timeline-meta { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; color: #435a6c; font-size: 0.9rem; margin-block-start: 0.2rem; }
 bdi { overflow-wrap: anywhere; }
 dl { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 0.3rem 1rem; }
 dd { margin: 0; }

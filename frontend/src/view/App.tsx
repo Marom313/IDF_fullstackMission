@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { locales, messages, type Locale } from '../i18n'
-import { purposes, roles, statuses, validQuery, type Application, type Purpose, type Role, type Status } from '../model/api'
+import { roles, statuses, validQuery, visitMinutes, type Application, type Role, type Status } from '../model/api'
 import { useApplications } from '../viewmodel/useApplications'
+import { formatDuration, SubmissionForm } from './SubmissionForm'
 
 export function App() {
   const [locale, setLocale] = useState<Locale>('he')
@@ -9,6 +10,7 @@ export function App() {
   const t = messages[locale]
   const vm = useApplications()
   const date = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' })
+  const number = new Intl.NumberFormat(locale)
 
   useEffect(() => {
     document.documentElement.lang = locale
@@ -51,31 +53,7 @@ export function App() {
         </label>
       </div>
     </header>
-    {vm.role === 'applicant' && <section>
-      <h2>{t.submitTitle}</h2>
-      <form onSubmit={event => { event.preventDefault(); vm.submit() }} className="controls">
-        <label>{t.purpose}
-          <select value={vm.purpose} onChange={event => vm.setPurpose(event.target.value as Purpose)}>
-            {purposes.map(purpose => <option key={purpose} value={purpose}>{t[purpose]}</option>)}
-          </select>
-        </label>
-        {vm.purpose === 'DEMO_OTHER' && <label className="purpose-details">{t.otherDetails}
-          <input required maxLength={200} placeholder={t.syntheticExample} value={vm.purposeDetails}
-            onChange={event => vm.setPurposeDetails(event.target.value)} />
-        </label>}
-        <label>{t.arrival}
-          <input type="datetime-local" required value={vm.arrival} onChange={event => vm.setArrival(event.target.value)} />
-        </label>
-        <label>{t.departure}
-          <input type="datetime-local" required value={vm.departure} onChange={event => vm.setDeparture(event.target.value)} />
-        </label>
-        <button disabled={vm.busy || !vm.canSubmit}>{t.submit}</button>
-        <p className="form-note" aria-live="polite">
-          {vm.validVisit ? <>{t.days} <strong>{vm.days}</strong></> :
-            vm.arrival && vm.departure ? t.invalidDates : t.localTime}
-        </p>
-      </form>
-    </section>}
+    {vm.role === 'applicant' && <SubmissionForm locale={locale} vm={vm} />}
     {vm.actionError && <p role="alert">{t.actionError}</p>}
     <section>
       <div className="controls">
@@ -86,11 +64,14 @@ export function App() {
         </select>}
       </div>
       {vm.role === 'admin' && <div className="controls status-filters" role="group" aria-label={t.all}>
-        {(['', ...statuses] as const).map(status => <button key={status} className="secondary"
+        {(['', ...statuses] as const).map(status => <button key={status} className="secondary status-filter"
           aria-pressed={vm.status === status} onClick={() => vm.changeStatus(status)}>
           {status ? t[status] : t.all}
+          {vm.counts && <span className="status-count">{number.format(status ? (vm.counts[status] ?? 0) :
+            Object.values(vm.counts).reduce((sum, count) => sum + count, 0))}</span>}
         </button>)}
       </div>}
+      {vm.role === 'admin' && vm.countsError && <p role="status">{t.countsError}</p>}
       <form className="controls search" onSubmit={event => { event.preventDefault(); vm.searchById() }}>
         <label>{t.applicationId}
           <input dir="ltr" placeholder="a1b2c3d4" aria-describedby="search-hint" value={vm.searchInput}
@@ -127,7 +108,10 @@ export function App() {
           <dt>{t.arrival}</dt><dd>{date.format(new Date(vm.detail.application.arrivalAt))}</dd>
           <dt>{t.departure}</dt><dd>{date.format(new Date(vm.detail.application.departureAt))}</dd>
         </>}
-        <dt>{t.days}</dt><dd>{vm.detail.application.days}</dd>
+        <dt>{t.durationLabel}</dt><dd>{formatDuration(
+          vm.detail.application.arrivalAt && vm.detail.application.departureAt
+            ? visitMinutes(vm.detail.application.arrivalAt, vm.detail.application.departureAt)
+            : vm.detail.application.days * 1440, locale)}</dd>
         <dt>{t.eligibility}</dt><dd>{vm.detail.application.eligible ? t.eligible : t.ineligible}</dd>
         {vm.detail.permit && <>
           <dt>{t.permit}</dt><dd><bdi>{vm.detail.permit.id}</bdi></dd>
@@ -169,11 +153,15 @@ export function App() {
         </li>)}
       </ul>}
       <h3>{t.history}</h3>
-      <ul>
+      <ol className="timeline">
         {vm.detail.history.map((entry, index) => <li key={index}>
-          {t[entry.status]} · <bdi>{entry.actor}</bdi> · {date.format(new Date(entry.createdAt))}
+          <span className="status" data-status={entry.status}>{t[entry.status]}</span>
+          <div className="timeline-meta">
+            <bdi>{entry.actor}</bdi>
+            <time dateTime={entry.createdAt}>{date.format(new Date(entry.createdAt))}</time>
+          </div>
         </li>)}
-      </ul>
+      </ol>
     </section>}
   </main>
 }

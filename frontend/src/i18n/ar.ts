@@ -1,4 +1,13 @@
 export default {
+  choosePurpose: "اختر غرض الزيارة",
+  dateLabel: "التاريخ",
+  timeLabel: "الوقت",
+  clockFormat: "أدخل 08:30 أو 0830.",
+  durationLabel: "مدة تصريح الدخول",
+  requiredField: "أكمل هذا الحقل",
+  invalidTime: "أدخل وقتًا صالحًا بنظام 24 ساعة",
+  submittedNotice: "تم استلام الطلب. يمكنك تقديم طلب آخر.",
+  countsError: "تعذر تحميل أعداد الطلبات.",
   otherDetails: "تفاصيل غرض الزيارة",
   syntheticExample: "مثلاً، لقاء تجريبي خيالي",
   arrival: "تاريخ ووقت الدخول",

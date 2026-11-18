@@ -1,4 +1,13 @@
 export default {
+  choosePurpose: "Choose a visit purpose",
+  dateLabel: "Date",
+  timeLabel: "Time",
+  clockFormat: "Enter 08:30 or 0830.",
+  durationLabel: "Entry permit duration",
+  requiredField: "Complete this field",
+  invalidTime: "Enter a valid 24-hour time",
+  submittedNotice: "Application received. You can submit another.",
+  countsError: "Could not load application counts.",
   otherDetails: "Visit purpose details",
   syntheticExample: "For example, a fictional demo meetup",
   arrival: "Arrival date and time",

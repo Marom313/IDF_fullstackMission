@@ -1,4 +1,13 @@
 export default {
+  choosePurpose: "Выберите цель визита",
+  dateLabel: "Дата",
+  timeLabel: "Время",
+  clockFormat: "Введите 08:30 или 0830.",
+  durationLabel: "Срок действия разрешения",
+  requiredField: "Заполните это поле",
+  invalidTime: "Введите допустимое время в 24-часовом формате",
+  submittedNotice: "Заявление принято. Можно подать ещё одно.",
+  countsError: "Не удалось загрузить счётчики заявлений.",
   otherDetails: "Подробности цели визита",
   syntheticExample: "Например, вымышленная демо-встреча",
   arrival: "Дата и время въезда",
