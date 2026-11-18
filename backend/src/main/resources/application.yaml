@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: PermitFlow
+  datasource:
+    url: jdbc:postgresql://localhost:5432/permitflow
+    username: permitflow
+    password: permitflow
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/permitflow
+    redis:
+      host: localhost
+      timeout: 2s
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      acks: all
+      properties:
+        delivery.timeout.ms: 15000
+        request.timeout.ms: 5000
+        max.block.ms: 5000
+    consumer:
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 3MB
+  jackson:
+    deserialization:
+      accept-float-as-int: false
+permitflow:
+  minio:
+    url: http://localhost:9000
+    access-key: permitflow
+    secret-key: permitflow-local

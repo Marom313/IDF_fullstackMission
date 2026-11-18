@@ -1,0 +1,191 @@
+package dev.permitflow.applications;
+
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import dev.permitflow.events.Outbox;
+import io.swagger.v3.oas.annotations.media.Schema;
+import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+@Service
+public class ApplicationService {
+    public enum Purpose { DEMO_VISIT, DEMO_EVENT, DEMO_OTHER }
+
+    @Schema(requiredProperties = {"id", "applicant", "purpose", "days", "status", "createdAt", "eligible"})
+    public record Application(UUID id, String applicant, Purpose purpose, int days,
+                              ApplicationStatus status, OffsetDateTime createdAt) {
+        public boolean isEligible() { return days <= DemoRules.maximumDays(purpose); }
+    }
+
+    @Schema(requiredProperties = {"id", "expiresAt"})
+    public record Permit(UUID id, OffsetDateTime expiresAt) {}
+    @Schema(requiredProperties = {"status", "actor", "createdAt"})
+    public record History(ApplicationStatus status, String actor, OffsetDateTime createdAt) {}
+    @Schema(requiredProperties = {"application", "history"})
+    public record Detail(Application application, @JsonInclude(JsonInclude.Include.NON_NULL) Permit permit,
+                         List<History> history) {}
+
+    private static final String SELECT = """
+            SELECT id, applicant, purpose, days, status, created_at FROM applications
+            """;
+
+    private final JdbcClient db;
+    private final Outbox outbox;
+    private final DemoRules rules;
+
+    public ApplicationService(JdbcClient db, Outbox outbox, DemoRules rules) {
+        this.db = db;
+        this.outbox = outbox;
+        this.rules = rules;
+    }
+
+    @Transactional
+    public Application submit(String applicant, UUID key, Purpose purpose, int days) {
+        return submit(applicant, key, purpose, days, "web");
+    }
+
+    @Transactional
+    public Application importSubmission(UUID key, Purpose purpose, int days) {
+        return submit("demo-applicant", key, purpose, days, "import");
+    }
+
+    private Application submit(String applicant, UUID key, Purpose purpose, int days, String source) {
+        UUID id = UUID.randomUUID();
+        int inserted = db.sql("""
+                INSERT INTO applications (id, applicant, submission_key, purpose, days, status, submission_source)
+                VALUES (:id, :applicant, :key, :purpose, :days, 'SUBMITTED', :source)
+                ON CONFLICT (applicant, submission_key, submission_source) DO NOTHING
+                """).params(Map.of("id", id, "applicant", applicant, "key", key,
+                "purpose", purpose.name(), "days", days, "source", source)).update();
+        if (inserted == 1) {
+            if (source.equals("web")) {
+                rules.limitSubmission(applicant);
+            }
+            history(id, ApplicationStatus.SUBMITTED, applicant);
+            outbox.append(id, "ApplicationSubmitted", ApplicationStatus.SUBMITTED, applicant);
+            return find(id, false);
+        }
+        Application existing = db.sql(SELECT + """
+                 WHERE applicant = :applicant AND submission_key = :key AND submission_source = :source
+                """).param("applicant", applicant).param("key", key).param("source", source)
+                .query(Application.class).single();
+        if (existing.purpose() != purpose || existing.days() != days) {
+            throw conflict("SUBMISSION_KEY_REUSED");
+        }
+        return existing;
+    }
+
+    public List<Application> list(Authentication actor, ApplicationStatus status, UUID id, int page) {
+        return db.sql(SELECT + """
+                 WHERE (:own = false OR applicant = :actor)
+                   AND (CAST(:status AS text) IS NULL OR status = :status)
+                   AND (CAST(:id AS uuid) IS NULL OR id = :id)
+                 ORDER BY created_at DESC, id LIMIT 50 OFFSET :offset
+                """).param("own", applicant(actor)).param("actor", actor.getName())
+                .param("status", status == null ? null : status.name()).param("id", id)
+                .param("offset", (long) page * 50).query(Application.class).list();
+    }
+
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public Detail detail(Authentication actor, UUID id) {
+        Application application = find(id, false);
+        if (applicant(actor) && !application.applicant().equals(actor.getName())) {
+            throw missing();
+        }
+        Permit permit = db.sql("SELECT id, expires_at FROM permits WHERE application_id = :id")
+                .param("id", id).query(Permit.class).optional().orElse(null);
+        List<History> history = db.sql("""
+                SELECT status, actor, created_at FROM application_history WHERE application_id = :id ORDER BY id
+                """).param("id", id).query(History.class).list();
+        return new Detail(application, permit, history);
+    }
+
+    @Transactional
+    public Application startReview(UUID id, String actor) {
+        transition(find(id, true), ApplicationStatus.IN_REVIEW, actor);
+        return find(id, false);
+    }
+
+    @Transactional
+    public Application decide(UUID id, String actor, boolean approved) {
+        Application application = find(id, true);
+        if (approved && !application.isEligible()) {
+            throw conflict("INELIGIBLE");
+        }
+        transition(application, approved ? ApplicationStatus.APPROVED : ApplicationStatus.REJECTED, actor);
+        db.sql("INSERT INTO decisions (application_id, reviewer, approved) VALUES (:id, :actor, :approved)")
+                .param("id", id).param("actor", actor).param("approved", approved).update();
+        outbox.append(id, "DecisionMade", approved ? ApplicationStatus.APPROVED : ApplicationStatus.REJECTED, actor);
+        return find(id, false);
+    }
+
+    @Transactional
+    public Permit issue(UUID id, String actor) {
+        Application application = find(id, true);
+        if (application.status() == ApplicationStatus.ISSUED) {
+            return db.sql("SELECT id, expires_at FROM permits WHERE application_id = :id")
+                    .param("id", id).query(Permit.class).single();
+        }
+        transition(application, ApplicationStatus.ISSUED, actor);
+        outbox.append(id, "PermitIssued", ApplicationStatus.ISSUED, actor);
+        return db.sql("""
+                INSERT INTO permits (id, application_id, issued_by, expires_at)
+                VALUES (:permitId, :id, :actor, now() + make_interval(days => :days))
+                RETURNING id, expires_at
+                """).param("permitId", UUID.randomUUID()).param("id", id).param("actor", actor)
+                .param("days", application.days()).query(Permit.class).single();
+    }
+
+    @Scheduled(fixedDelay = 60_000)
+    @Transactional
+    public void expirePermits() {
+        List<UUID> due = db.sql("""
+                SELECT a.id FROM applications a JOIN permits p ON p.application_id = a.id
+                WHERE a.status = 'ISSUED' AND p.expires_at <= now()
+                ORDER BY p.expires_at LIMIT 100 FOR UPDATE OF a SKIP LOCKED
+                """).query(UUID.class).list();
+        for (UUID id : due) {
+            transition(find(id, false), ApplicationStatus.EXPIRED, "demo-system");
+        }
+    }
+
+    private Application find(UUID id, boolean lock) {
+        return db.sql(SELECT + " WHERE id = :id" + (lock ? " FOR UPDATE" : ""))
+                .param("id", id).query(Application.class).optional().orElseThrow(ApplicationService::missing);
+    }
+
+    private void transition(Application application, ApplicationStatus next, String actor) {
+        if (!application.status().allows(next)) {
+            throw conflict("INVALID_TRANSITION");
+        }
+        db.sql("UPDATE applications SET status = :status WHERE id = :id")
+                .param("status", next.name()).param("id", application.id()).update();
+        history(application.id(), next, actor);
+    }
+
+    private void history(UUID id, ApplicationStatus status, String actor) {
+        db.sql("INSERT INTO application_history (application_id, status, actor) VALUES (:id, :status, :actor)")
+                .param("id", id).param("status", status.name()).param("actor", actor).update();
+    }
+
+    private static boolean applicant(Authentication actor) {
+        return actor.getAuthorities().stream().anyMatch(role -> role.getAuthority().equals("ROLE_APPLICANT"));
+    }
+
+    private static ResponseStatusException missing() {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "APPLICATION_NOT_FOUND");
+    }
+
+    private static ResponseStatusException conflict(String code) {
+        return new ResponseStatusException(HttpStatus.CONFLICT, code);
+    }
+}

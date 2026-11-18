@@ -1,0 +1,9 @@
+backend/target/
+frontend/node_modules/
+frontend/dist/
+frontend/.npm-cache/
+.env
+demo/import/inbox/*
+!demo/import/inbox/.gitkeep
+demo/import/rejected/*
+!demo/import/rejected/.gitkeep
