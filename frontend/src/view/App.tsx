@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { locales, messages, type Locale } from '../i18n'
-import { purposes, roles, statuses, validId, type Purpose, type Role, type Status } from '../model/api'
+import { purposes, roles, statuses, validQuery, type Application, type Purpose, type Role, type Status } from '../model/api'
 import { useApplications } from '../viewmodel/useApplications'
 
 export function App() {
   const [locale, setLocale] = useState<Locale>('he')
+  const [copiedId, setCopiedId] = useState('')
   const t = messages[locale]
   const vm = useApplications()
   const date = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' })
@@ -14,10 +15,30 @@ export function App() {
     document.documentElement.dir = locale === 'he' || locale === 'ar' ? 'rtl' : 'ltr'
   }, [locale])
 
+  function renderItems(items: Application[]) {
+    return <ul className="applications">
+      {items.map(item => <li key={item.id}>
+        <button className="application" aria-pressed={vm.selected === item.id} onClick={() => vm.setSelected(item.id)}>
+          <span>{t[item.purpose]}</span>
+          <span className="status" data-status={item.status}>{t[item.status]}</span>
+          <bdi>{item.id}</bdi>
+        </button>
+        <button className="secondary" onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(item.id)
+            setCopiedId(item.id)
+          } catch {
+            vm.setSearchInput(item.id)
+          }
+        }}>{copiedId === item.id ? t.copied : t.copyId}</button>
+      </li>)}
+    </ul>
+  }
+
   return <main>
     <header>
       <div><h1>PermitFlow</h1><p>{t.subtitle}</p></div>
-      <div className="controls">
+      <div className="controls header-controls">
         <label>{t.language}
           <select value={locale} onChange={event => setLocale(event.target.value as Locale)}>
             {locales.map(value => <option key={value} value={value}>{messages[value].name}</option>)}
@@ -38,38 +59,55 @@ export function App() {
             {purposes.map(purpose => <option key={purpose} value={purpose}>{t[purpose]}</option>)}
           </select>
         </label>
-        <label>{t.days}
-          <input type="number" required min="1" max="90" value={Number.isNaN(vm.days) ? '' : vm.days}
-            onChange={event => vm.setDays(event.target.valueAsNumber)} />
+        {vm.purpose === 'DEMO_OTHER' && <label className="purpose-details">{t.otherDetails}
+          <input required maxLength={200} placeholder={t.syntheticExample} value={vm.purposeDetails}
+            onChange={event => vm.setPurposeDetails(event.target.value)} />
+        </label>}
+        <label>{t.arrival}
+          <input type="datetime-local" required value={vm.arrival} onChange={event => vm.setArrival(event.target.value)} />
         </label>
-        <button disabled={vm.busy}>{t.submit}</button>
+        <label>{t.departure}
+          <input type="datetime-local" required value={vm.departure} onChange={event => vm.setDeparture(event.target.value)} />
+        </label>
+        <button disabled={vm.busy || !vm.canSubmit}>{t.submit}</button>
+        <p className="form-note" aria-live="polite">
+          {vm.validVisit ? <>{t.days} <strong>{vm.days}</strong></> :
+            vm.arrival && vm.departure ? t.invalidDates : t.localTime}
+        </p>
       </form>
     </section>}
     {vm.actionError && <p role="alert">{t.actionError}</p>}
     <section>
       <div className="controls">
         <h2>{t.applications}</h2>
-        <select aria-label={t.all} value={vm.status} onChange={event => vm.changeStatus(event.target.value as Status | '')}>
+        {vm.role !== 'admin' && <select aria-label={t.all} value={vm.status} onChange={event => vm.changeStatus(event.target.value as Status | '')}>
           <option value="">{t.all}</option>
           {statuses.map(status => <option key={status} value={status}>{t[status]}</option>)}
-        </select>
+        </select>}
       </div>
+      {vm.role === 'admin' && <div className="controls status-filters" role="group" aria-label={t.all}>
+        {(['', ...statuses] as const).map(status => <button key={status} className="secondary"
+          aria-pressed={vm.status === status} onClick={() => vm.changeStatus(status)}>
+          {status ? t[status] : t.all}
+        </button>)}
+      </div>}
       <form className="controls search" onSubmit={event => { event.preventDefault(); vm.searchById() }}>
         <label>{t.applicationId}
-          <input dir="ltr" value={vm.searchInput} onChange={event => vm.setSearchInput(event.target.value)} />
+          <input dir="ltr" placeholder="a1b2c3d4" aria-describedby="search-hint" value={vm.searchInput}
+            onChange={event => vm.setSearchInput(event.target.value)} />
         </label>
-        <button disabled={!!vm.searchInput.trim() && !validId(vm.searchInput.trim())}>{t.search}</button>
+        <button disabled={!validQuery(vm.searchInput.trim())}>{t.search}</button>
+        {(vm.search || vm.searchInput) && <button type="button" className="secondary" onClick={vm.clearSearch}>{t.clearSearch}</button>}
+        <p className="form-note" id="search-hint">{t.searchHint}</p>
       </form>
       {vm.listError ? <p role="alert">{t.loadError}</p> : vm.listLoading ? <p role="status">{t.loading}</p> :
-        vm.items.length === 0 ? <p>{t.empty}</p> :
-          <ul className="applications">
-            {vm.items.map(item => <li key={item.id}>
-              <button aria-pressed={vm.selected === item.id} onClick={() => vm.setSelected(item.id)}>
-                <span>{t[item.purpose]} · {t[item.status]}</span>
-                <bdi>{item.id}</bdi>
-              </button>
-            </li>)}
-          </ul>}
+        vm.items.length === 0 ? <p>{vm.search ? t.noMatches : t.empty}</p> :
+        vm.role === 'admin' && !vm.status ? statuses.map(status => {
+          const items = vm.items.filter(item => item.status === status)
+          return items.length > 0 && <div className="application-group" key={status}>
+            <h3>{t[status]}</h3>{renderItems(items)}
+          </div>
+        }) : renderItems(vm.items)}
       <div className="controls">
         <button disabled={vm.page === 0 || vm.listLoading} onClick={() => vm.setPage(vm.page - 1)}>{t.previous}</button>
         <button disabled={vm.items.length < 50 || vm.listLoading || vm.listError} onClick={() => vm.setPage(vm.page + 1)}>{t.next}</button>
@@ -80,7 +118,15 @@ export function App() {
     {vm.detail && vm.detail.application.id === vm.selected && <section>
       <h2>{t.details}</h2>
       <dl>
+        <dt>{t.applicationId}</dt><dd><bdi>{vm.detail.application.id}</bdi></dd>
         <dt>{t.purpose}</dt><dd>{t[vm.detail.application.purpose]}</dd>
+        {vm.detail.application.purposeDetails && <>
+          <dt>{t.otherDetails}</dt><dd>{vm.detail.application.purposeDetails}</dd>
+        </>}
+        {vm.detail.application.arrivalAt && vm.detail.application.departureAt && <>
+          <dt>{t.arrival}</dt><dd>{date.format(new Date(vm.detail.application.arrivalAt))}</dd>
+          <dt>{t.departure}</dt><dd>{date.format(new Date(vm.detail.application.departureAt))}</dd>
+        </>}
         <dt>{t.days}</dt><dd>{vm.detail.application.days}</dd>
         <dt>{t.eligibility}</dt><dd>{vm.detail.application.eligible ? t.eligible : t.ineligible}</dd>
         {vm.detail.permit && <>

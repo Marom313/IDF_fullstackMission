@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, validDays, validId, type Application, type Detail, type DocumentMetadata, type Purpose, type Role, type Status } from '../model/api'
+import { api, validQuery, visitDuration, type Application, type Detail, type DocumentMetadata, type Purpose, type Role, type Status } from '../model/api'
 
 export function useApplications() {
   const [role, setRole] = useState<Role>('applicant')
@@ -12,7 +12,12 @@ export function useApplications() {
   const [detail, setDetail] = useState<Detail>()
   const [documents, setDocuments] = useState<DocumentMetadata[]>([])
   const [purpose, setPurpose] = useState<Purpose>('DEMO_VISIT')
-  const [days, setDays] = useState(7)
+  const [arrival, setArrival] = useState('')
+  const [departure, setDeparture] = useState('')
+  const [purposeDetails, setPurposeDetails] = useState('')
+  const days = visitDuration(arrival, departure)
+  const validVisit = days >= 1 && days <= 90
+  const canSubmit = validVisit && (purpose !== 'DEMO_OTHER' || !!purposeDetails.trim())
   const [revision, refresh] = useState(0)
   const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState(false)
@@ -71,15 +76,21 @@ export function useApplications() {
   }
 
   function submit() {
-    if (!validDays(days)) return
-    const fingerprint = JSON.stringify({ purpose, days })
+    if (!canSubmit) return
+    const submission = {
+      purpose,
+      arrivalAt: new Date(arrival).toISOString(),
+      departureAt: new Date(departure).toISOString(),
+      ...(purpose === 'DEMO_OTHER' && { purposeDetails: purposeDetails.trim() }),
+    }
+    const fingerprint = JSON.stringify(submission)
     pending.current ??= { fingerprint, key: crypto.randomUUID() }
     if (pending.current.fingerprint !== fingerprint) {
       pending.current = { fingerprint, key: crypto.randomUUID() }
     }
     const { key } = pending.current
     void mutate(async () => {
-      const application = await api.submit(role, { purpose, days }, key)
+      const application = await api.submit(role, submission, key)
       pending.current = undefined
       setStatus('')
       setPage(0)
@@ -91,11 +102,19 @@ export function useApplications() {
 
   return {
     role, status, page, items, selected, detail, documents, purpose, days, listLoading, listError, detailError, actionError, busy,
-    searchInput, setSearchInput, setPurpose, setDays, setSelected, setPage, submit,
+    arrival, departure, purposeDetails, validVisit, canSubmit, setArrival, setDeparture, setPurposeDetails,
+    search, searchInput, setSearchInput, setPurpose, setSelected, setPage, submit,
     searchById() {
       const id = searchInput.trim()
-      if (id && !validId(id)) return
+      if (id && !validQuery(id)) return
       setSearch(id)
+      setSelected('')
+      setStatus('')
+      setPage(0)
+    },
+    clearSearch() {
+      setSearch('')
+      setSearchInput('')
       setPage(0)
     },
     changeRole(nextRole: Role) {
@@ -104,8 +123,6 @@ export function useApplications() {
       setItems([])
       setPage(0)
       setStatus('')
-      setSearch('')
-      setSearchInput('')
       setActionError(false)
       setRole(nextRole)
     },

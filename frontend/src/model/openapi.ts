@@ -140,7 +140,12 @@ export interface components {
             /** @enum {string} */
             purpose: "DEMO_VISIT" | "DEMO_EVENT" | "DEMO_OTHER";
             /** Format: int32 */
-            days: number;
+            days?: number;
+            purposeDetails?: string;
+            /** Format: date-time */
+            arrivalAt?: string;
+            /** Format: date-time */
+            departureAt?: string;
         };
         Application: {
             /** Format: uuid */
@@ -154,6 +159,11 @@ export interface components {
             status: "SUBMITTED" | "IN_REVIEW" | "APPROVED" | "REJECTED" | "ISSUED" | "EXPIRED";
             /** Format: date-time */
             createdAt: string;
+            purposeDetails?: string;
+            /** Format: date-time */
+            arrivalAt?: string;
+            /** Format: date-time */
+            departureAt?: string;
             eligible: boolean;
         };
         Permit: {
@@ -199,6 +209,7 @@ export interface operations {
             query?: {
                 status?: "SUBMITTED" | "IN_REVIEW" | "APPROVED" | "REJECTED" | "ISSUED" | "EXPIRED";
                 id?: string;
+                query?: string;
                 page?: number;
             };
             header?: never;

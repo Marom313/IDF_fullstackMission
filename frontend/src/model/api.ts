@@ -13,8 +13,11 @@ export type Detail = Schemas['Detail']
 export type Submission = Schemas['Submission']
 export type DocumentMetadata = Schemas['Metadata']
 
-export const validDays = (days: number) => Number.isInteger(days) && days >= 1 && days <= 90
-export const validId = (id: string) => /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)
+export const validQuery = (query: string) => /^[0-9a-f-]{4,36}$/i.test(query)
+
+export function visitDuration(arrival: string, departure: string) {
+  return Math.ceil((new Date(departure).getTime() - new Date(arrival).getTime()) / 86_400_000)
+}
 
 async function fetchApplication(role: Role, path: string, options?: RequestInit): Promise<Response> {
   const response = await fetch('/api/applications' + path, {
@@ -37,8 +40,10 @@ async function request<T>(role: Role, path: string, options?: RequestInit): Prom
 }
 
 export const api = {
-  list: (role: Role, page: number, status: Status | '', id: string, signal: AbortSignal) =>
-    request<Application[]>(role, '?' + new URLSearchParams({ page: String(page), status, id }), { signal }),
+  list: (role: Role, page: number, status: Status | '', query: string, signal: AbortSignal) =>
+    request<Application[]>(role, '?' + new URLSearchParams({
+      page: String(page), ...(status && { status }), ...(query && { query }),
+    }), { signal }),
   detail: (role: Role, id: string, signal: AbortSignal) => request<Detail>(role, '/' + id, { signal }),
   documents: (role: Role, id: string, signal: AbortSignal) =>
     request<DocumentMetadata[]>(role, '/' + id + '/documents', { signal }),
