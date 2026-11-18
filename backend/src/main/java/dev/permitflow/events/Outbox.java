@@ -6,6 +6,8 @@ import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.permitflow.applications.ApplicationStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -15,6 +17,7 @@ import org.springframework.transaction.annotation.Propagation;
 
 @Component
 public class Outbox {
+    private static final Logger log = LoggerFactory.getLogger(Outbox.class);
     public static final String EVENTS = "permitflow.application-events";
     public static final String IMPORTS = "permitflow.csv-import";
     public static final String IMPORT_ERRORS = "permitflow.csv-import-errors";
@@ -56,8 +59,11 @@ public class Outbox {
             return;
         }
         Event event = next.get();
-        kafka.send(EVENTS, event.applicationId().toString(), json.writeValueAsString(event))
-                .get(20, TimeUnit.SECONDS);
+        var metadata = kafka.send(EVENTS, event.applicationId().toString(), json.writeValueAsString(event))
+                .get(20, TimeUnit.SECONDS).getRecordMetadata();
+        log.info("Kafka acknowledged eventId={} applicationId={} type={} topic={} partition={} offset={}",
+                event.eventId(), event.applicationId(), event.eventType(), metadata.topic(),
+                metadata.partition(), metadata.offset());
         db.sql("UPDATE outbox SET published_at = now() WHERE event_id = :id")
                 .param("id", event.eventId()).update();
     }

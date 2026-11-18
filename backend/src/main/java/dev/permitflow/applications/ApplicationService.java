@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.EnumMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -13,16 +14,21 @@ import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import dev.permitflow.events.Outbox;
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class ApplicationService {
+    private static final Logger log = LoggerFactory.getLogger(ApplicationService.class);
     public enum Purpose { DEMO_VISIT, DEMO_EVENT, DEMO_OTHER }
 
     @Schema(requiredProperties = {"id", "applicant", "purpose", "days", "status", "createdAt", "eligible"})
@@ -146,6 +152,17 @@ public class ApplicationService {
                 .param("offset", (long) page * 50).query(Application.class).list();
     }
 
+    public Map<ApplicationStatus, Long> counts() {
+        Map<ApplicationStatus, Long> counts = new EnumMap<>(ApplicationStatus.class);
+        for (ApplicationStatus status : ApplicationStatus.values()) {
+            counts.put(status, 0L);
+        }
+        db.sql("SELECT status, count(*) FROM applications GROUP BY status").query((rs, row) ->
+                Map.entry(ApplicationStatus.valueOf(rs.getString(1)), rs.getLong(2)))
+                .list().forEach(entry -> counts.put(entry.getKey(), entry.getValue()));
+        return counts;
+    }
+
     @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public Detail detail(Authentication actor, UUID id) {
         Application application = find(id, false);
@@ -190,10 +207,12 @@ public class ApplicationService {
         outbox.append(id, "PermitIssued", ApplicationStatus.ISSUED, actor);
         return db.sql("""
                 INSERT INTO permits (id, application_id, issued_by, expires_at)
-                VALUES (:permitId, :id, :actor, now() + make_interval(days => :days))
+                SELECT :permitId, id, :actor,
+                       now() + COALESCE(departure_at - arrival_at, make_interval(days => days))
+                FROM applications WHERE id = :id
                 RETURNING id, expires_at
                 """).param("permitId", UUID.randomUUID()).param("id", id).param("actor", actor)
-                .param("days", application.days()).query(Permit.class).single();
+                .query(Permit.class).single();
     }
 
     @Scheduled(fixedDelay = 60_000)
@@ -226,6 +245,12 @@ public class ApplicationService {
     private void history(UUID id, ApplicationStatus status, String actor) {
         db.sql("INSERT INTO application_history (application_id, status, actor) VALUES (:id, :status, :actor)")
                 .param("id", id).param("status", status.name()).param("actor", actor).update();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                log.info("Application status saved applicationId={} status={} actor={}", id, status, actor);
+            }
+        });
     }
 
     private static boolean applicant(Authentication actor) {

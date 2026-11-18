@@ -63,6 +63,12 @@ public class ApplicationController {
         return applications.detail(actor, id);
     }
 
+    @GetMapping("/counts")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<ApplicationStatus, Long> counts() {
+        return applications.counts();
+    }
+
     @PostMapping("/{id}/review")
     @PreAuthorize("hasAnyRole('REVIEWER', 'ADMIN')")
     public Application review(Authentication actor, @PathVariable UUID id,
