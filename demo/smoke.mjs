@@ -21,11 +21,18 @@ async function request(role, path, { method = 'GET', json, body, headers, expect
 }
 
 const key = randomUUID()
-const submission = { method: 'POST', headers: { 'Idempotency-Key': key }, json: { purpose: 'DEMO_VISIT', days: 7 } }
+await request('reviewer', '/counts', { expected: 403 })
+const before = await request('admin', '/counts')
+const submission = {
+  method: 'POST', headers: { 'Idempotency-Key': key }, json: {
+    purpose: 'DEMO_VISIT', arrivalAt: '2035-06-01T10:30:00+03:00', departureAt: '2035-06-09T13:34:00+03:00',
+  },
+}
 const saved = await request('applicant', '', submission)
 assert.equal(saved.status, 'SUBMITTED')
 assert.equal((await request('applicant', '', submission)).id, saved.id)
-await request('applicant', '', { ...submission, json: { ...submission.json, days: 8 }, expected: 409 })
+await request('applicant', '', { ...submission, json: { ...submission.json, departureAt: '2035-06-09T13:35:00+03:00' }, expected: 409 })
+assert.equal((await request('admin', '/counts')).SUBMITTED, before.SUBMITTED + 1)
 
 const path = '/' + saved.id
 assert.equal((await request('reviewer', '?status=SUBMITTED&id=' + saved.id))[0].id, saved.id)
@@ -41,6 +48,8 @@ assert.equal((await request('admin', path + '/permit', { method: 'POST' })).id, 
 const detail = await request('applicant', path)
 assert.equal(detail.permit.id, permit.id)
 assert.deepEqual(detail.history.map(item => item.status), ['SUBMITTED', 'IN_REVIEW', 'APPROVED', 'ISSUED'])
+assert.equal(Date.parse(permit.expiresAt) - Date.parse(detail.history.at(-1).createdAt),
+  (8 * 1440 + 3 * 60 + 4) * 60_000)
 
 const ineligible = await request('applicant', '', {
   method: 'POST', headers: { 'Idempotency-Key': randomUUID() }, json: { purpose: 'DEMO_EVENT', days: 21 },
