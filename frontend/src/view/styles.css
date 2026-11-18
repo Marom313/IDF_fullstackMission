@@ -48,6 +48,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .timeline li::before { content: ''; position: absolute; inset-inline-start: -0.38rem; inset-block-start: 0.4rem; inline-size: 0.6rem; block-size: 0.6rem; border-radius: 50%; background: #235677; box-shadow: 0 0 0 3px white; }
 .timeline li:last-child { border-color: transparent; padding-block-end: 0; }
 .timeline-meta { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; color: #435a6c; font-size: 0.9rem; margin-block-start: 0.2rem; }
+.activity-drawer { position: fixed; inset-block: 0; inset-inline-start: auto; inset-inline-end: 0; margin: 0; inline-size: min(100%, 27rem); max-inline-size: 100%; block-size: 100dvh; max-block-size: 100dvh; padding: 1.25rem; border: 0; border-inline-start: 1px solid #d1dce6; color: inherit; box-shadow: 0 0 2rem #163b5730; }
+.activity-drawer::backdrop { background: #17253370; }
+.activity-heading { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; }
+.activity-heading h2 { margin: 0; }
+.activity-drawer .form-note { margin-block: 0.75rem; }
+.activity-entries { list-style: none; padding: 0; display: grid; gap: 0.65rem; }
+.activity-entries li { display: grid; gap: 0.25rem; padding: 0.75rem; border: 1px solid #d1dce6; border-radius: 0.65rem; background: #f6f9fc; }
+.activity-entries time, .activity-entries bdi { font-size: 0.85rem; color: #435a6c; }
 bdi { overflow-wrap: anywhere; }
 dl { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 0.3rem 1rem; }
 dd { margin: 0; }

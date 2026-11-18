@@ -1,4 +1,12 @@
 export default {
+  activityLogs: "Журнал действий",
+  closeActivity: "Закрыть",
+  refreshActivity: "Обновить журнал",
+  activityDescription: "До 50 последних изменений статуса и отправок в Kafka.",
+  emptyActivity: "Нет действий для отображения.",
+  STATUS_SAVED: "Статус сохранён",
+  KAFKA_PENDING: "Ожидает отправки в Kafka",
+  KAFKA_PUBLISHED: "Отправлено в Kafka",
   choosePurpose: "Выберите цель визита",
   dateLabel: "Дата",
   timeLabel: "Время",

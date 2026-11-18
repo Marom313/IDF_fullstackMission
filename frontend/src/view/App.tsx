@@ -3,6 +3,7 @@ import { locales, messages, type Locale } from '../i18n'
 import { roles, statuses, validQuery, visitMinutes, type Application, type Role, type Status } from '../model/api'
 import { useApplications } from '../viewmodel/useApplications'
 import { formatDuration, SubmissionForm } from './SubmissionForm'
+import { ActivityDrawer } from './ActivityDrawer'
 
 export function App() {
   const [locale, setLocale] = useState<Locale>('he')
@@ -58,6 +59,7 @@ export function App() {
     <section>
       <div className="controls">
         <h2>{t.applications}</h2>
+        {vm.role === 'admin' && <ActivityDrawer locale={locale} />}
         {vm.role !== 'admin' && <select aria-label={t.all} value={vm.status} onChange={event => vm.changeStatus(event.target.value as Status | '')}>
           <option value="">{t.all}</option>
           {statuses.map(status => <option key={status} value={status}>{t[status]}</option>)}

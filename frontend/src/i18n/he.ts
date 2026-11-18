@@ -1,4 +1,12 @@
 export default {
+  activityLogs: "לוג פעילות",
+  closeActivity: "סגור",
+  refreshActivity: "רענן לוג",
+  activityDescription: "עד 50 רשומות אחרונות של שינויי סטטוס ושליחה ל־Kafka.",
+  emptyActivity: "אין פעילות להצגה.",
+  STATUS_SAVED: "סטטוס נשמר",
+  KAFKA_PENDING: "ממתין לשליחה ל־Kafka",
+  KAFKA_PUBLISHED: "נשלח ל־Kafka",
   choosePurpose: "בחר מטרת ביקור",
   dateLabel: "תאריך",
   timeLabel: "שעה",

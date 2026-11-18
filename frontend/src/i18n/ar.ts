@@ -1,4 +1,12 @@
 export default {
+  activityLogs: "سجل النشاط",
+  closeActivity: "إغلاق",
+  refreshActivity: "تحديث السجل",
+  activityDescription: "آخر 50 سجلًا لتغييرات الحالة والإرسال إلى Kafka.",
+  emptyActivity: "لا يوجد نشاط للعرض.",
+  STATUS_SAVED: "حُفظت الحالة",
+  KAFKA_PENDING: "بانتظار الإرسال إلى Kafka",
+  KAFKA_PUBLISHED: "نُشر في Kafka",
   choosePurpose: "اختر غرض الزيارة",
   dateLabel: "التاريخ",
   timeLabel: "الوقت",

@@ -148,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/applications/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -210,6 +226,17 @@ export interface components {
             actor: string;
             /** Format: date-time */
             createdAt: string;
+        };
+        Entry: {
+            id: string;
+            /** Format: uuid */
+            applicationId: string;
+            /** @enum {string} */
+            kind: "STATUS_SAVED" | "KAFKA_PENDING" | "KAFKA_PUBLISHED";
+            /** @enum {string} */
+            status: "SUBMITTED" | "IN_REVIEW" | "APPROVED" | "REJECTED" | "ISSUED" | "EXPIRED";
+            /** Format: date-time */
+            occurredAt: string;
         };
     };
     responses: never;
@@ -485,6 +512,26 @@ export interface operations {
                     "*/*": {
                         [key: string]: number;
                     };
+                };
+            };
+        };
+    };
+    list_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Entry"][];
                 };
             };
         };

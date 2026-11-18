@@ -12,6 +12,7 @@ export type Application = Schemas['Application']
 export type Detail = Schemas['Detail']
 export type Submission = Schemas['Submission']
 export type DocumentMetadata = Schemas['Metadata']
+export type ActivityEntry = Schemas['Entry']
 
 export const validQuery = (query: string) => /^[0-9a-f-]{4,36}$/i.test(query)
 
@@ -48,6 +49,7 @@ async function request<T>(role: Role, path: string, options?: RequestInit): Prom
 }
 
 export const api = {
+  activity: (signal: AbortSignal) => request<ActivityEntry[]>('admin', '/activity', { signal }),
   counts: (role: Role, signal: AbortSignal) =>
     request<Partial<Record<Status, number>>>(role, '/counts', { signal }),
   list: (role: Role, page: number, status: Status | '', query: string, signal: AbortSignal) =>

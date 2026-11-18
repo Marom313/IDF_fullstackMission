@@ -1,4 +1,12 @@
 export default {
+  activityLogs: "Activity log",
+  closeActivity: "Close",
+  refreshActivity: "Refresh log",
+  activityDescription: "Up to 50 recent status changes and Kafka deliveries.",
+  emptyActivity: "No activity to show.",
+  STATUS_SAVED: "Status saved",
+  KAFKA_PENDING: "Waiting for Kafka",
+  KAFKA_PUBLISHED: "Published to Kafka",
   choosePurpose: "Choose a visit purpose",
   dateLabel: "Date",
   timeLabel: "Time",
