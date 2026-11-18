@@ -22,6 +22,8 @@ async function request(role, path, { method = 'GET', json, body, headers, expect
 
 const key = randomUUID()
 await request('reviewer', '/counts', { expected: 403 })
+await request('reviewer', '/activity', { expected: 403 })
+await request('applicant', '/activity', { expected: 403 })
 const before = await request('admin', '/counts')
 const submission = {
   method: 'POST', headers: { 'Idempotency-Key': key }, json: {
@@ -92,5 +94,18 @@ const document = await request('applicant', path + '/documents', { method: 'POST
 assert.equal((await request('applicant', path + '/documents', { method: 'POST', body: upload })).id, document.id)
 assert.equal((await request('reviewer', path + '/documents'))[0].id, document.id)
 assert.equal(await request('reviewer', path + '/documents/' + document.id), contents)
+
+let activity = []
+for (let attempt = 0; attempt < 20; attempt++) {
+  activity = await request('admin', '/activity')
+  if (activity.some(entry => entry.applicationId === saved.id && entry.kind === 'KAFKA_PUBLISHED'
+    && entry.status === 'ISSUED')) break
+  await new Promise(resolve => setTimeout(resolve, 1000))
+}
+assert.ok(activity.length <= 50)
+assert.ok(activity.some(entry => entry.applicationId === saved.id && entry.kind === 'STATUS_SAVED'
+  && entry.status === 'SUBMITTED'))
+assert.ok(activity.some(entry => entry.applicationId === saved.id && entry.kind === 'KAFKA_PUBLISHED'
+  && entry.status === 'ISSUED'))
 
 console.log('PermitFlow smoke test passed for application ' + saved.id)

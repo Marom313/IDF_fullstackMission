@@ -1,6 +1,8 @@
 # קליטת CSV ב־NiFi
 
-הפעילו את פרופיל הייבוא באמצעות `docker compose --profile import up --build -d`. התחברו ל־[NiFi](https://localhost:8443/nifi) עם `permitflow` ו־`permitflow-nifi-demo`. ‏Compose מפעיל את NiFi עם תעודה מקומית ותיקיות לנתוני הדמו.
+כשהמערכת כבר פועלת, הפעילו את NiFi באמצעות `docker compose --profile import up -d nifi`. כדי להפעיל לראשונה את המערכת יחד עם NiFi, השתמשו ב־`docker compose --profile import up --build -d`. התחברו ל־[NiFi](https://localhost:8443/nifi) עם `permitflow` ו־`permitflow-nifi-demo`. ‏Compose מפעיל את NiFi עם תעודה מקומית ותיקיות לנתוני הדמו.
+
+אחרי הגדרת הזרימה והרצת ייבוא, פתחו **Data Provenance** בתפריט הראשי כדי לעקוב אחרי קובץ או שורה שעברו בין שלבי העיבוד. כדי לראות פריטים שממתינים לטיפול, לחצו לחיצה ימנית על החיבור בין מעבדים ובחרו **List queue**. בקשות שנקלטו מופיעות בטבלת `public.applications`, ושורות שנדחו בבדיקת NiFi מופיעות ב־`demo/import/rejected`.
 
 ## חיבור הזרימה על הקנבס
 
