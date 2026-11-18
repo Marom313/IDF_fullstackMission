@@ -29,6 +29,7 @@ await request('applicant', '', { ...submission, json: { ...submission.json, days
 
 const path = '/' + saved.id
 assert.equal((await request('reviewer', '?status=SUBMITTED&id=' + saved.id))[0].id, saved.id)
+assert.ok((await request('admin', '?query=' + saved.id.slice(0, 8))).some(item => item.id === saved.id))
 await request('applicant', path + '/review', { method: 'POST', expected: 403 })
 await request('admin', path + '/permit', { method: 'POST', expected: 409 })
 await request('reviewer', path + '/review', { method: 'POST' })
@@ -50,6 +51,29 @@ await request('reviewer', ineligiblePath + '/decision', { method: 'POST', json: 
 assert.equal((await request('reviewer', ineligiblePath + '/decision', {
   method: 'POST', json: { approved: false },
 })).status, 'REJECTED')
+
+const timedSubmission = {
+  method: 'POST',
+  headers: { 'Idempotency-Key': randomUUID() },
+  json: {
+    purpose: 'DEMO_OTHER',
+    purposeDetails: 'Fictional demo meetup',
+    arrivalAt: '2035-06-01T10:30:00+03:00',
+    departureAt: '2035-06-02T11:00:00+03:00',
+  },
+}
+const timed = await request('applicant', '', timedSubmission)
+assert.equal(timed.days, 2)
+assert.equal(timed.purposeDetails, timedSubmission.json.purposeDetails)
+assert.equal(new Date(timed.arrivalAt).toISOString(), '2035-06-01T07:30:00.000Z')
+assert.equal(new Date(timed.departureAt).toISOString(), '2035-06-02T08:00:00.000Z')
+assert.equal((await request('applicant', '', timedSubmission)).id, timed.id)
+await request('applicant', '', {
+  ...timedSubmission, json: { ...timedSubmission.json, purposeDetails: '' }, expected: 400,
+})
+await request('applicant', '', {
+  ...timedSubmission, json: { ...timedSubmission.json, departureAt: timedSubmission.json.arrivalAt }, expected: 400,
+})
 
 const contents = await readFile(new URL('./demo-document.txt', import.meta.url), 'utf8')
 const upload = new FormData()
