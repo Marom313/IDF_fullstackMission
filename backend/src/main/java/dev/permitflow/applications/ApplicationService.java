@@ -1,8 +1,13 @@
 package dev.permitflow.applications;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -22,7 +27,10 @@ public class ApplicationService {
 
     @Schema(requiredProperties = {"id", "applicant", "purpose", "days", "status", "createdAt", "eligible"})
     public record Application(UUID id, String applicant, Purpose purpose, int days,
-                              ApplicationStatus status, OffsetDateTime createdAt) {
+                              ApplicationStatus status, OffsetDateTime createdAt,
+                              @JsonInclude(JsonInclude.Include.NON_NULL) String purposeDetails,
+                              @JsonInclude(JsonInclude.Include.NON_NULL) OffsetDateTime arrivalAt,
+                              @JsonInclude(JsonInclude.Include.NON_NULL) OffsetDateTime departureAt) {
         public boolean isEligible() { return days <= DemoRules.maximumDays(purpose); }
     }
 
@@ -35,7 +43,7 @@ public class ApplicationService {
                          List<History> history) {}
 
     private static final String SELECT = """
-            SELECT id, applicant, purpose, days, status, created_at FROM applications
+            SELECT id, applicant, purpose, days, status, created_at, purpose_details, arrival_at, departure_at FROM applications
             """;
 
     private final JdbcClient db;
@@ -49,23 +57,34 @@ public class ApplicationService {
     }
 
     @Transactional
-    public Application submit(String applicant, UUID key, Purpose purpose, int days) {
-        return submit(applicant, key, purpose, days, "web");
+    public Application submit(String applicant, UUID key, ApplicationController.Submission submission) {
+        String details = submission.purposeDetails() == null ? "" : submission.purposeDetails().strip();
+        if ((submission.purpose() == Purpose.DEMO_OTHER) == details.isBlank()) {
+            throw invalid("INVALID_PURPOSE_DETAILS");
+        }
+        OffsetDateTime arrival = normalize(submission.arrivalAt());
+        OffsetDateTime departure = normalize(submission.departureAt());
+        int days = stayDays(submission.days(), arrival, departure);
+        return submit(applicant, key, submission.purpose(), days, "web", details.isEmpty() ? null : details,
+                arrival, departure);
     }
 
     @Transactional
     public Application importSubmission(UUID key, Purpose purpose, int days) {
-        return submit("demo-applicant", key, purpose, days, "import");
+        return submit("demo-applicant", key, purpose, days, "import", null, null, null);
     }
 
-    private Application submit(String applicant, UUID key, Purpose purpose, int days, String source) {
+    private Application submit(String applicant, UUID key, Purpose purpose, int days, String source,
+                               String details, OffsetDateTime arrival, OffsetDateTime departure) {
         UUID id = UUID.randomUUID();
         int inserted = db.sql("""
-                INSERT INTO applications (id, applicant, submission_key, purpose, days, status, submission_source)
-                VALUES (:id, :applicant, :key, :purpose, :days, 'SUBMITTED', :source)
+                INSERT INTO applications (id, applicant, submission_key, purpose, days, status, submission_source,
+                                          purpose_details, arrival_at, departure_at)
+                VALUES (:id, :applicant, :key, :purpose, :days, 'SUBMITTED', :source, :details, :arrival, :departure)
                 ON CONFLICT (applicant, submission_key, submission_source) DO NOTHING
                 """).params(Map.of("id", id, "applicant", applicant, "key", key,
-                "purpose", purpose.name(), "days", days, "source", source)).update();
+                "purpose", purpose.name(), "days", days, "source", source))
+                .param("details", details).param("arrival", arrival).param("departure", departure).update();
         if (inserted == 1) {
             if (source.equals("web")) {
                 rules.limitSubmission(applicant);
@@ -78,20 +97,52 @@ public class ApplicationService {
                  WHERE applicant = :applicant AND submission_key = :key AND submission_source = :source
                 """).param("applicant", applicant).param("key", key).param("source", source)
                 .query(Application.class).single();
-        if (existing.purpose() != purpose || existing.days() != days) {
+        if (existing.purpose() != purpose || existing.days() != days
+                || !Objects.equals(existing.purposeDetails(), details)
+                || !Objects.equals(normalize(existing.arrivalAt()), arrival)
+                || !Objects.equals(normalize(existing.departureAt()), departure)) {
             throw conflict("SUBMISSION_KEY_REUSED");
         }
         return existing;
     }
 
-    public List<Application> list(Authentication actor, ApplicationStatus status, UUID id, int page) {
+    private static OffsetDateTime normalize(OffsetDateTime value) {
+        return value == null ? null : value.withOffsetSameInstant(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
+    }
+
+    private static int stayDays(Integer legacyDays, OffsetDateTime arrival, OffsetDateTime departure) {
+        if (arrival == null && departure == null && legacyDays != null) {
+            return legacyDays;
+        }
+        if (arrival == null || departure == null || !departure.isAfter(arrival)) {
+            throw invalid("INVALID_VISIT_DATES");
+        }
+        Duration duration = Duration.between(arrival, departure);
+        if (duration.compareTo(Duration.ofDays(90)) > 0) {
+            throw invalid("INVALID_VISIT_DATES");
+        }
+        long wholeDays = duration.toDays();
+        int days = (int) (wholeDays + (duration.equals(Duration.ofDays(wholeDays)) ? 0 : 1));
+        if (legacyDays != null && legacyDays != days) {
+            throw invalid("INVALID_VISIT_DATES");
+        }
+        return days;
+    }
+
+    private static ResponseStatusException invalid(String code) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, code);
+    }
+
+    public List<Application> list(Authentication actor, ApplicationStatus status, UUID id, String query, int page) {
         return db.sql(SELECT + """
                  WHERE (:own = false OR applicant = :actor)
                    AND (CAST(:status AS text) IS NULL OR status = :status)
                    AND (CAST(:id AS uuid) IS NULL OR id = :id)
+                   AND (CAST(:query AS text) IS NULL OR CAST(id AS text) LIKE :query)
                  ORDER BY created_at DESC, id LIMIT 50 OFFSET :offset
                 """).param("own", applicant(actor)).param("actor", actor.getName())
                 .param("status", status == null ? null : status.name()).param("id", id)
+                .param("query", query == null ? null : "%" + query.toLowerCase(Locale.ROOT) + "%")
                 .param("offset", (long) page * 50).query(Application.class).list();
     }
 

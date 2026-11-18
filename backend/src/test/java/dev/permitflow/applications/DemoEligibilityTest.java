@@ -14,7 +14,7 @@ class DemoEligibilityTest {
             "DEMO_EVENT,15,false", "DEMO_OTHER,1,false"})
     void checksSyntheticEligibilityAtBoundaries(ApplicationService.Purpose purpose, int days, boolean eligible) {
         var application = new ApplicationService.Application(UUID.randomUUID(), "demo-applicant",
-                purpose, days, ApplicationStatus.SUBMITTED, OffsetDateTime.now());
+                purpose, days, ApplicationStatus.SUBMITTED, OffsetDateTime.now(), null, null, null);
         assertThat(application.isEligible()).isEqualTo(eligible);
     }
 }
