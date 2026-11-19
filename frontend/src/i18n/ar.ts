@@ -1,4 +1,6 @@
 export default {
+  reviewerInstructions: "تظهر الطلبات الجديدة بحالة «مقدم». اختر طلبًا وابدأ مراجعته لاتخاذ قرار.",
+  approvalUnavailable: "الموافقة غير متاحة لأن الطلب لا يستوفي قواعد الأهلية التجريبية.",
   activityLogs: "سجل النشاط",
   closeActivity: "إغلاق",
   refreshActivity: "تحديث السجل",

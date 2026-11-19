@@ -168,11 +168,15 @@ export function useApplications() {
       setPage(0)
     },
     changeRole(nextRole: Role) {
-      setSelected('')
+      if (nextRole === role) return
+      setSelected(nextRole === 'reviewer' ? submittedId : '')
       setDetail(undefined)
       setItems([])
+      setListLoading(true)
       setPage(0)
       setStatus('')
+      setSearch('')
+      setSearchInput('')
       setActionError(false)
       setCounts(undefined)
       setCountsError(false)

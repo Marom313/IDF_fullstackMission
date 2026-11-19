@@ -1,4 +1,6 @@
 export default {
+  reviewerInstructions: "בקשות שנקלטו מופיעות כ״הוגשה״. בחר בקשה ולחץ על ״פתיחת בדיקה״ כדי לקבל החלטה.",
+  approvalUnavailable: "האישור מושבת כי הבקשה אינה עומדת בכללי הזכאות של הדמו.",
   activityLogs: "לוג פעילות",
   closeActivity: "סגור",
   refreshActivity: "רענן לוג",

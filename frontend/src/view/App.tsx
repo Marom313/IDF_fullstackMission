@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { locales, messages, type Locale } from '../i18n'
 import { roles, statuses, validQuery, visitMinutes, type Application, type Role, type Status } from '../model/api'
 import { useApplications } from '../viewmodel/useApplications'
@@ -10,6 +10,8 @@ export function App() {
   const [copiedId, setCopiedId] = useState('')
   const t = messages[locale]
   const vm = useApplications()
+  const detailsHeading = useRef<HTMLHeadingElement>(null)
+  const detailId = vm.detail?.application.id
   const date = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' })
   const number = new Intl.NumberFormat(locale)
 
@@ -17,6 +19,12 @@ export function App() {
     document.documentElement.lang = locale
     document.documentElement.dir = locale === 'he' || locale === 'ar' ? 'rtl' : 'ltr'
   }, [locale])
+
+  useEffect(() => {
+    if (vm.role === 'reviewer' && detailId && detailId === vm.selected) {
+      detailsHeading.current?.focus()
+    }
+  }, [detailId, vm.role, vm.selected])
 
   function renderItems(items: Application[]) {
     return <ul className="applications">
@@ -65,6 +73,7 @@ export function App() {
           {statuses.map(status => <option key={status} value={status}>{t[status]}</option>)}
         </select>}
       </div>
+      {vm.role === 'reviewer' && <p className="form-note">{t.reviewerInstructions}</p>}
       {vm.role === 'admin' && <div className="controls status-filters" role="group" aria-label={t.all}>
         {(['', ...statuses] as const).map(status => <button key={status} className="secondary status-filter"
           aria-pressed={vm.status === status} onClick={() => vm.changeStatus(status)}>
@@ -99,7 +108,7 @@ export function App() {
     {vm.detailError && <p role="alert">{t.loadError}</p>}
     {vm.selected && !vm.detail && !vm.detailError && <p role="status">{t.loading}</p>}
     {vm.detail && vm.detail.application.id === vm.selected && <section>
-      <h2>{t.details}</h2>
+      <h2 ref={detailsHeading} tabIndex={-1}>{t.details}</h2>
       <dl>
         <dt>{t.applicationId}</dt><dd><bdi>{vm.detail.application.id}</bdi></dd>
         <dt>{t.purpose}</dt><dd>{t[vm.detail.application.purpose]}</dd>
@@ -124,8 +133,11 @@ export function App() {
         {vm.role !== 'applicant' && vm.detail.application.status === 'SUBMITTED' &&
           <button disabled={vm.busy} onClick={() => void vm.act('review')}>{t.review}</button>}
         {vm.role !== 'applicant' && vm.detail.application.status === 'IN_REVIEW' && <>
-          <button disabled={vm.busy || !vm.detail.application.eligible} onClick={() => void vm.act('decision', true)}>{t.approve}</button>
+          <button disabled={vm.busy || !vm.detail.application.eligible}
+            aria-describedby={vm.detail.application.eligible ? undefined : 'approval-unavailable'}
+            onClick={() => void vm.act('decision', true)}>{t.approve}</button>
           <button disabled={vm.busy} onClick={() => void vm.act('decision', false)}>{t.reject}</button>
+          {!vm.detail.application.eligible && <p id="approval-unavailable" className="form-note">{t.approvalUnavailable}</p>}
         </>}
         {vm.role === 'admin' && vm.detail.application.status === 'APPROVED' &&
           <button disabled={vm.busy} onClick={() => void vm.act('permit')}>{t.issue}</button>}

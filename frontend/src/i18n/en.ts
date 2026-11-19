@@ -1,4 +1,6 @@
 export default {
+  reviewerInstructions: "New requests appear as Submitted. Select a request and start its review to make a decision.",
+  approvalUnavailable: "Approval is disabled because this request does not meet the demo eligibility rules.",
   activityLogs: "Activity log",
   closeActivity: "Close",
   refreshActivity: "Refresh log",
