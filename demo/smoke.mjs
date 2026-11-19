@@ -37,11 +37,14 @@ await request('applicant', '', { ...submission, json: { ...submission.json, depa
 assert.equal((await request('admin', '/counts')).SUBMITTED, before.SUBMITTED + 1)
 
 const path = '/' + saved.id
+assert.ok((await request('reviewer', '')).some(item => item.id === saved.id && item.status === 'SUBMITTED'))
 assert.equal((await request('reviewer', '?status=SUBMITTED&id=' + saved.id))[0].id, saved.id)
 assert.ok((await request('admin', '?query=' + saved.id.slice(0, 8))).some(item => item.id === saved.id))
 await request('applicant', path + '/review', { method: 'POST', expected: 403 })
 await request('admin', path + '/permit', { method: 'POST', expected: 409 })
-await request('reviewer', path + '/review', { method: 'POST' })
+const review = await request('reviewer', path + '/review', { method: 'POST' })
+assert.equal(review.status, 'IN_REVIEW')
+assert.equal((await request('reviewer', path)).application.eligible, true)
 await request('reviewer', path + '/decision', { method: 'POST', json: { approved: true } })
 await request('reviewer', path + '/permit', { method: 'POST', expected: 403 })
 const permit = await request('admin', path + '/permit', { method: 'POST' })
