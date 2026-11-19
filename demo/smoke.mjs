@@ -1,14 +1,37 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 
 const root = process.env.PERMITFLOW_API_URL ?? 'http://localhost:8080'
+const repo = fileURLToPath(new URL('../', import.meta.url))
+const topic = 'permitflow.application-events'
+
+function composeExec(service, ...args) {
+  return execFileSync('docker', ['compose', 'exec', '-T', service, ...args], {
+    cwd: repo, encoding: 'utf8', timeout: 30_000,
+  }).trim()
+}
+
+function postgres(sql) {
+  return JSON.parse(composeExec('postgres', 'psql', '-XAt', '-v', 'ON_ERROR_STOP=1',
+    '-U', 'permitflow', '-d', 'permitflow', '-c', sql))
+}
+
+function kafkaEndOffset() {
+  const output = composeExec('kafka', '/opt/kafka/bin/kafka-get-offsets.sh',
+    '--bootstrap-server', 'localhost:9092', '--topic', topic, '--time', 'latest')
+  const match = /^permitflow\.application-events:0:(\d+)$/.exec(output)
+  assert.ok(match, 'Expected the local demo topic to have one partition')
+  return Number(match[1])
+}
 
 async function request(role, path, { method = 'GET', json, body, headers, expected = 200 } = {}) {
   const response = await fetch(root + '/api/applications' + path, {
     method,
     headers: {
-      Authorization: 'Basic ' + Buffer.from('demo-' + role + ':permitflow-demo').toString('base64'),
+      ...(role && { Authorization: 'Basic ' + Buffer.from('demo-' + role + ':permitflow-demo').toString('base64') }),
       'X-PermitFlow-Demo': '1',
       ...(json && { 'Content-Type': 'application/json' }),
       ...headers,
@@ -21,6 +44,8 @@ async function request(role, path, { method = 'GET', json, body, headers, expect
 }
 
 const key = randomUUID()
+const firstOffset = kafkaEndOffset()
+await request(null, '/activity', { expected: 401 })
 await request('reviewer', '/counts', { expected: 403 })
 await request('reviewer', '/activity', { expected: 403 })
 await request('applicant', '/activity', { expected: 403 })
@@ -37,6 +62,10 @@ await request('applicant', '', { ...submission, json: { ...submission.json, depa
 assert.equal((await request('admin', '/counts')).SUBMITTED, before.SUBMITTED + 1)
 
 const path = '/' + saved.id
+assert.match(saved.id, /^[0-9a-f-]{36}$/)
+const stored = postgres(`SELECT json_build_object('id', id, 'status', status, 'purpose', purpose)
+  FROM public.applications WHERE id = '${saved.id}';`)
+assert.deepEqual(stored, { id: saved.id, status: 'SUBMITTED', purpose: submission.json.purpose })
 assert.ok((await request('reviewer', '')).some(item => item.id === saved.id && item.status === 'SUBMITTED'))
 assert.equal((await request('reviewer', '?status=SUBMITTED&id=' + saved.id))[0].id, saved.id)
 assert.ok((await request('admin', '?query=' + saved.id.slice(0, 8))).some(item => item.id === saved.id))
@@ -110,5 +139,39 @@ assert.ok(activity.some(entry => entry.applicationId === saved.id && entry.kind 
   && entry.status === 'SUBMITTED'))
 assert.ok(activity.some(entry => entry.applicationId === saved.id && entry.kind === 'KAFKA_PUBLISHED'
   && entry.status === 'ISSUED'))
+
+const outbox = postgres(`SELECT json_agg(json_build_object('eventId', event_id,
+  'applicationId', application_id, 'eventType', event_type, 'status', status,
+  'published', published_at IS NOT NULL) ORDER BY sequence)
+  FROM public.outbox WHERE application_id = '${saved.id}';`)
+assert.deepEqual(outbox.map(event => [event.eventType, event.status, event.published]), [
+  ['ApplicationSubmitted', 'SUBMITTED', true],
+  ['DecisionMade', 'APPROVED', true],
+  ['PermitIssued', 'ISSUED', true],
+])
+
+const messageCount = kafkaEndOffset() - firstOffset
+assert.ok(messageCount >= outbox.length)
+const kafkaEvents = composeExec('kafka', '/opt/kafka/bin/kafka-console-consumer.sh',
+  '--bootstrap-server', 'localhost:9092', '--topic', topic, '--partition', '0',
+  '--offset', String(firstOffset), '--max-messages', String(messageCount), '--timeout-ms', '10000')
+  .split(/\r?\n/).map(line => JSON.parse(line)).filter(event => event.applicationId === saved.id)
+assert.deepEqual([...new Set(kafkaEvents.map(event => event.eventId))], outbox.map(event => event.eventId))
+for (const event of kafkaEvents) {
+  const expected = outbox.find(entry => entry.eventId === event.eventId)
+  assert.equal(event.eventType, expected.eventType)
+  assert.equal(event.status, expected.status)
+}
+
+const auditCommand = `print(JSON.stringify(db.application_events
+  .find({applicationId: ${JSON.stringify(saved.id)}}, {_id: 1, eventType: 1, status: 1}).toArray()))`
+let audit = []
+for (let attempt = 0; attempt < 15; attempt++) {
+  audit = JSON.parse(composeExec('mongo', 'mongosh', 'permitflow', '--quiet', '--eval', auditCommand))
+  if (audit.length >= outbox.length) break
+  await new Promise(resolve => setTimeout(resolve, 1000))
+}
+assert.deepEqual(audit.map(event => [event._id, event.eventType, event.status]).sort(),
+  outbox.map(event => [event.eventId, event.eventType, event.status]).sort())
 
 console.log('PermitFlow smoke test passed for application ' + saved.id)
